@@ -42,7 +42,7 @@ data = {
 df = pd.DataFrame(data)
 
 # -------------------------------------------------
-# 2. Text cleaning function
+# 2. Text cleaning
 # -------------------------------------------------
 def clean_text(text):
     text = text.lower()
@@ -68,7 +68,7 @@ df["combined_features"] = (
 )
 
 # -------------------------------------------------
-# 4. TF-IDF Vectorization
+# 4. TF-IDF
 # -------------------------------------------------
 vectorizer = TfidfVectorizer(stop_words="english")
 tfidf_matrix = vectorizer.fit_transform(df["combined_features"])
@@ -83,16 +83,16 @@ cosine_sim = cosine_similarity(tfidf_matrix)
 # -------------------------------------------------
 def recommend_products(product_name, top_n=3):
     if product_name not in df["product_name"].values:
-        return pd.DataFrame({"Error": ["Selected product not found in database."]})
+        return None
 
-    product_index = df[df["product_name"] == product_name].index[0]
-    similarity_scores = list(enumerate(cosine_sim[product_index]))
-    similarity_scores = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
-    similarity_scores = similarity_scores[1:top_n+1]
+    idx = df[df["product_name"] == product_name].index[0]
+    scores = list(enumerate(cosine_sim[idx]))
+    scores = sorted(scores, key=lambda x: x[1], reverse=True)
+    scores = scores[1:top_n+1]
 
-    product_indices = [i[0] for i in similarity_scores]
-    result_df = df.loc[product_indices, ["product_name", "category", "tags"]].copy()
-    result_df["similarity_score"] = [round(i[1], 3) for i in similarity_scores]
+    indices = [i[0] for i in scores]
+    result_df = df.loc[indices, ["product_name", "category", "tags", "description"]].copy()
+    result_df["similarity_score"] = [round(i[1], 3) for i in scores]
 
     return result_df
 
@@ -100,22 +100,40 @@ def recommend_products(product_name, top_n=3):
 # 7. Streamlit UI
 # -------------------------------------------------
 st.title("🛒 Product Recommendation System")
-st.write("Content-based recommender using TF-IDF and cosine similarity")
 
-# Show dataset
 st.subheader("📦 Product Dataset")
 st.dataframe(df[["product_name", "category", "tags", "description"]])
 
-# Dropdown for product selection
-st.subheader("🔽 Select a Product")
-selected_product = st.selectbox("Choose a product:", [""] + df["product_name"].tolist())
+selected_product = st.selectbox("Select a product:", [""] + df["product_name"].tolist())
 
-# Button
 if st.button("Get Recommendations"):
     if selected_product == "":
-        st.error("Please select a product first.")
+        st.error("Please select a product.")
     else:
+        # Show selected product details
+        st.subheader("🟢 Selected Product")
+        product_row = df[df["product_name"] == selected_product].iloc[0]
+
+        st.markdown(f"""
+        **Name:** {product_row['product_name']}  
+        **Category:** {product_row['category']}  
+        **Tags:** {product_row['tags']}  
+        **Description:** {product_row['description']}
+        """)
+
+        # Get recommendations
         recommendations = recommend_products(selected_product)
 
-        st.subheader("✅ Top 3 Recommended Products")
-        st.dataframe(recommendations)
+        st.subheader("⭐ Recommended Products")
+
+        # Display recommendations as cards
+        cols = st.columns(3)
+
+        for col, (_, row) in zip(cols, recommendations.iterrows()):
+            with col:
+                st.markdown("### 🛍️ " + row["product_name"])
+                st.markdown(f"**Category:** {row['category']}")
+                st.markdown(f"**Tags:** {row['tags']}")
+                st.markdown(f"**Description:** {row['description']}")
+                st.markdown(f"**Similarity:** {row['similarity_score']}")
+                st.markdown("---")
